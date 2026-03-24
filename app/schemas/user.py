@@ -1,5 +1,4 @@
-# app/schemas/user.py
-from pydantic import BaseModel, EmailStr, Field, conint
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Literal, Optional
 from datetime import date
 
@@ -11,9 +10,9 @@ class LocationSchema(BaseModel):
 
 class PreferenceSchema(BaseModel):
     interested_in: List[Literal["MEN", "WOMEN", "BINARY", "EVERYONE"]]
-    age_min: conint(ge=18, le=100) = 18
-    age_max: conint(ge=18, le=100) = 100
-    distance_km: conint(ge=1, le=5000) = 50
+    age_min: int = Field(default=18, ge=18, le=100)
+    age_max: int = Field(default=100, ge=18, le=100)
+    distance_km: int = Field(default=50, ge=1, le=5000)
 
 
 class UserCreateSchema(BaseModel):
@@ -36,16 +35,14 @@ class UserResponseSchema(BaseModel):
     first_name: str
     email: Optional[EmailStr] = None
     phone: str
-    age: int
+    age: Optional[int] = None  # ✅ Optional
     city: str
     distance_km: Optional[int] = None
     photos: List[str] = []
     bio: Optional[str] = None
-    relationship_goal: str
+    relationship_goal: Optional[str] = None
     gender: str
     status: Literal["UNDER_REVIEW", "APPROVED", "REJECTED"]
     discover_enabled: bool = True
 
-    class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True}  # ✅ Pydantic v2

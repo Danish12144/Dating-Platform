@@ -1,32 +1,45 @@
-# app/routes/swipe.py
-from fastapi import APIRouter, Depends, HTTPException
-from app.db.client import get_db
-from app.models.swipe import Swipe
-from app.schemas import swipe as swipe_schema
-from app.core.dependencies import get_current_user_id
+# app/utils/r2.py
+import boto3
+from botocore.exceptions import ClientError
+from app.core.config import settings
 
-router = APIRouter(tags=["swipe"])
+_r2_client = None
 
-@router.post("/swipe")
-async def swipe(
-    payload: swipe_schema.SwipeRequest,
-    user_id: str = Depends(get_current_user_id),
-    db=Depends(get_db),
-):
-    if payload.to_user_id == user_id:
-        raise HTTPException(status_code=400, detail="Cannot swipe yourself")
-    if await Swipe.exists(db, from_user=user_id, to_user=payload.to_user_id):
-        raise HTTPException(status_code=400, detail="Already swiped")
-    
-    await Swipe.create(db, from_user=user_id, to_user=payload.to_user_id, action=payload.action)
-    
-    # ✅ Match check
-    is_match = False
-    if payload.action == "LIKE":
-        is_match = await Swipe.check_match(db, user_id, payload.to_user_id)
-    
-    return {
-        "success": True,
-        "message": "Swipe recorded",
-        "match": is_match  # ✅ Frontend ko pata chalega match hua ya nahi
-    }
+def _get_r2_client():
+    global _r2_client
+    if _r2_client is None:
+        session = boto3.session.Session()
+        _r2_client = session.client(
+            "s3",
+            endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+            aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+            region_name=settings.R2_REGION,
+        )
+    return _r2_client
+
+
+def generate_presigned_put_url(key: str, expires_in: int = 600) -> str:
+    client = _get_r2_client()
+    try:
+        url = client.generate_presigned_url(
+            "put_object",
+            Params={"Bucket": settings.R2_BUCKET_NAME, "Key": key},
+            ExpiresIn=expires_in,
+        )
+        return url
+    except ClientError as exc:
+        raise RuntimeError(f"Could not generate signed PUT URL: {exc}") from exc
+
+
+def generate_presigned_get_url(key: str, expires_in: int = 600) -> str:
+    client = _get_r2_client()
+    try:
+        url = client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.R2_BUCKET_NAME, "Key": key},
+            ExpiresIn=expires_in,
+        )
+        return url
+    except ClientError as exc:
+        raise RuntimeError(f"Could not generate signed GET URL: {exc}") from exc

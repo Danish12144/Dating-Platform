@@ -1,4 +1,3 @@
-# app/schemas/chat.py
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
@@ -18,6 +17,4 @@ class MessageResponseSchema(BaseModel):
     media_url: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True}  # ✅ Pydantic v2
