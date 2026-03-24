@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.db.client import get_db
 from app.models.chat import Message
 from app.schemas import chat as chat_schema
-from app.routes.users import get_current_user_id
+from app.core.dependencies import get_current_user_id
 from app.utils.pagination import pagination_params
 
 router = APIRouter(tags=["chat"])

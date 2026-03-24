@@ -1,6 +1,7 @@
 # app/routes/admin.py
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from bson import ObjectId
 from app.db.client import get_db
 from app.models.user import User
@@ -8,40 +9,33 @@ from app.schemas.admin import AdminActionSchema
 from app.core.security import decode_token
 
 router = APIRouter(tags=["admin"])
+bearer_scheme = HTTPBearer()
 
-
-# ----- Admin guard (expects JWT with role="admin") -----
-async def admin_required(Authorization: str = Depends(lambda: None)):
-    if not Authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization")
-    try:
-        scheme, token = Authorization.split()
-        if scheme.lower() != "bearer":
-            raise ValueError()
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Bad Authorization header")
-    payload = decode_token(token)
+async def admin_required(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+) -> str:
+    payload = decode_token(credentials.credentials)
     if not payload or payload.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
-    return payload["sub"]   # admin user id (optional)
+    return payload["sub"]
 
+def serialize_user(u: dict) -> dict:
+    u["id"] = str(u.pop("_id"))
+    return u
 
-# ----- GET /admin/users  (filterable) -----
 @router.get("/admin/users")
 async def list_users(
-    status: str | None = Query(None),
+    user_status: str | None = Query(None),  # ✅ renamed to avoid shadowing
     db=Depends(get_db),
     _: str = Depends(admin_required),
 ):
     filt = {}
-    if status:
-        filt["status"] = status
+    if user_status:
+        filt["status"] = user_status
     cursor = db[User.collection_name].find(filt)
     users = await cursor.to_list(length=100)
-    return {"success": True, "data": {"users": users}}
+    return {"success": True, "data": {"users": [serialize_user(u) for u in users]}}  # ✅ serialize
 
-
-# ----- GET /admin/users/{id} -----
 @router.get("/admin/users/{user_id}")
 async def get_user_detail(
     user_id: str,
@@ -51,10 +45,8 @@ async def get_user_detail(
     user = await User.get_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"success": True, "data": {"user": user}}
+    return {"success": True, "data": {"user": serialize_user(user)}}  # ✅ serialize
 
-
-# ----- POST /admin/users/{id}/action -----
 @router.post("/admin/users/{user_id}/action")
 async def admin_action(
     user_id: str,
@@ -75,5 +67,4 @@ async def admin_action(
             }
         }}
     )
-    # TODO: send FCM notification about approval/rejection
     return {"success": True, "message": f"User {new_status.lower()}"}

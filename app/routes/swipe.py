@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.db.client import get_db
 from app.models.swipe import Swipe
 from app.schemas import swipe as swipe_schema
-from app.routes.users import get_current_user_id
+from app.core.dependencies import get_current_user_id
 
 router = APIRouter(tags=["swipe"])
 
