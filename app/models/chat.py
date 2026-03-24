@@ -16,7 +16,12 @@ class Message:
             "created_at": datetime.utcnow(),
         }
         result = await db[Message.collection_name].insert_one(doc)
-        return await db[Message.collection_name].find_one({"_id": result.inserted_id})
+        doc = await db[Message.collection_name].find_one({"_id": result.inserted_id})
+        # ✅ ObjectId serialize karo
+        doc["_id"] = str(doc["_id"])
+        doc["from_user_id"] = str(doc["from_user_id"])
+        doc["to_user_id"] = str(doc["to_user_id"])
+        return doc
 
     @staticmethod
     async def get_conversation(
@@ -32,4 +37,10 @@ class Message:
                 {"from_user_id": ObjectId(user_b), "to_user_id": ObjectId(user_a)},
             ]
         }).sort("created_at", -1).skip(skip).limit(limit)
-        return await cursor.to_list(length=limit)
+        msgs = await cursor.to_list(length=limit)
+        # ✅ saare ObjectId serialize karo
+        for m in msgs:
+            m["_id"] = str(m["_id"])
+            m["from_user_id"] = str(m["from_user_id"])
+            m["to_user_id"] = str(m["to_user_id"])
+        return msgs
